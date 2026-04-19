@@ -1,0 +1,16 @@
+default:
+  tags:
+    - linux
+    - docker
+    - homelab
+stages:
+  - build
+build:
+  stage: build
+  image: oven/bun:1
+  script:
+    - bun install --frozen-lockfile
+    - bun run build
+  artifacts:
+    paths:
+      - dist/
