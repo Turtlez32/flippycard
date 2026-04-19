@@ -1,10 +1,18 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH
+
 default:
   tags:
     - linux
     - docker
     - homelab
+
 stages:
   - build
+
 build:
   stage: build
   image: oven/bun:1
