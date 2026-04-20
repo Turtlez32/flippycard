@@ -322,14 +322,6 @@
   letter-spacing: 0.08em;
 }
 
-.back-mark {
-  position: relative;
-  z-index: 1;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #fff6ea;
-}
-
 .memory-card-front {
   transform: rotateY(180deg);
   color: #111827;

@@ -727,7 +727,6 @@ function App() {
                 <span className="memory-card-inner">
                   <span className="memory-card-face memory-card-back">
                     <span className="back-slot">{card.slot}</span>
-                    <span className="back-mark">?</span>
                   </span>
                   <span className="memory-card-face memory-card-front">
                     <span className="card-icon" aria-hidden="true">
