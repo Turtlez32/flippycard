@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import './App.css'
 
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_BASE_URL || '/ollama'
@@ -90,6 +90,94 @@ function parseAiPick(rawResponse, availableSlots) {
   const parsedPick = Number(matchedNumber[0])
 
   return availableSlots.includes(parsedPick) ? parsedPick : null
+}
+
+function getOllamaCapabilities(modelDetails) {
+  if (Array.isArray(modelDetails?.capabilities)) {
+    return modelDetails.capabilities
+  }
+
+  return []
+}
+
+function isGenerationCapable(modelDetails) {
+  const capabilities = getOllamaCapabilities(modelDetails)
+
+  if (capabilities.length === 0) {
+    return true
+  }
+
+  return capabilities.includes('completion')
+}
+
+function formatModelLabel(modelName, modelDetails) {
+  const parameterSize = modelDetails?.details?.parameter_size
+  const capabilities = getOllamaCapabilities(modelDetails)
+
+  if (parameterSize && capabilities.length > 0) {
+    return `${modelName} (${parameterSize}, ${capabilities.join(', ')})`
+  }
+
+  if (parameterSize) {
+    return `${modelName} (${parameterSize})`
+  }
+
+  if (capabilities.length > 0) {
+    return `${modelName} (${capabilities.join(', ')})`
+  }
+
+  return modelName
+}
+
+async function fetchSelectableOllamaModels() {
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`)
+
+  if (!response.ok) {
+    throw new Error(`Ollama returned ${response.status}`)
+  }
+
+  const result = await response.json()
+  const installedModels = result.models || []
+  const modelDetails = await Promise.all(
+    installedModels.map(async (model) => {
+      try {
+        const detailResponse = await fetch(`${OLLAMA_BASE_URL}/api/show`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model.name,
+          }),
+        })
+
+        if (!detailResponse.ok) {
+          throw new Error(`Ollama returned ${detailResponse.status}`)
+        }
+
+        const details = await detailResponse.json()
+
+        return {
+          ...model,
+          ...details,
+        }
+      } catch {
+        return model
+      }
+    }),
+  )
+
+  const selectableModels = modelDetails
+    .filter((model) => isGenerationCapable(model))
+    .map((model) => ({
+      name: model.name,
+      label: formatModelLabel(model.name, model),
+    }))
+
+  return {
+    installedModels,
+    selectableModels,
+  }
 }
 
 function App() {
@@ -432,68 +520,63 @@ function App() {
   const rememberAiCards = useEffectEvent((cards) => rememberCards(cards))
   const pickAiCard = useEffectEvent((options) => requestAiPick(options))
   const resolveAiAttempt = useEffectEvent((attempt) => resolveAttempt(attempt))
-
-  useEffect(() => {
-    let isActive = true
-
-    const loadModels = async () => {
+  const loadModels = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
       setOllamaState({ loading: true, connected: false, error: '' })
-
-      try {
-        const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`)
-
-        if (!response.ok) {
-          throw new Error(`Ollama returned ${response.status}`)
-        }
-
-        const result = await response.json()
-        const modelNames = (result.models || []).map((model) => model.name)
-
-        if (!isActive) {
-          return
-        }
-
-        setOllamaModels(modelNames)
-        setSelectedModel((currentModel) => {
-          if (currentModel && modelNames.includes(currentModel)) {
-            return currentModel
-          }
-
-          return modelNames[0] || ''
-        })
-        setOllamaState({
-          loading: false,
-          connected: modelNames.length > 0,
-          error: modelNames.length === 0 ? 'No Ollama models found.' : '',
-        })
-        setStatusMessage(
-          modelNames.length > 0
-            ? 'Ollama is ready. Your turn to flip the opening card.'
-            : 'Ollama responded, but no models are installed.',
-        )
-      } catch {
-        if (!isActive) {
-          return
-        }
-
-        setOllamaModels([])
-        setOllamaState({
-          loading: false,
-          connected: false,
-          error: `Could not reach Ollama at ${OLLAMA_TARGET_LABEL}.`,
-        })
-        setStatusMessage(
-          'The AI could not connect. Check the proxy target or enable CORS.',
-        )
-      }
+    } else {
+      setOllamaState((currentState) => ({
+        ...currentState,
+        loading: true,
+        error: '',
+      }))
     }
 
-    loadModels()
+    try {
+      const { installedModels, selectableModels } =
+        await fetchSelectableOllamaModels()
 
-    return () => {
-      isActive = false
+      setOllamaModels(selectableModels)
+      setSelectedModel((currentModel) => {
+        if (currentModel && selectableModels.some((model) => model.name === currentModel)) {
+          return currentModel
+        }
+
+        return selectableModels[0]?.name || ''
+      })
+      setOllamaState({
+        loading: false,
+        connected: selectableModels.length > 0,
+        error:
+          installedModels.length === 0
+            ? 'No Ollama models found.'
+            : selectableModels.length === 0
+              ? 'Installed Ollama models are not chat/generation capable.'
+              : '',
+      })
+      setStatusMessage(
+        selectableModels.length > 0
+          ? 'Ollama is ready. Your turn to flip the opening card.'
+          : installedModels.length === 0
+            ? 'Ollama responded, but no models are installed.'
+            : 'Ollama responded, but no generation-capable models are available for AI play.',
+      )
+    } catch {
+      setOllamaModels([])
+      setSelectedModel('')
+      setOllamaState({
+        loading: false,
+        connected: false,
+        error: `Could not reach Ollama at ${OLLAMA_TARGET_LABEL}.`,
+      })
+      setStatusMessage(
+        'The AI could not connect. Check the proxy target or enable CORS.',
+      )
     }
   }, [])
+
+  useEffect(() => {
+    loadModels()
+  }, [loadModels])
 
   useEffect(() => {
     setAiMemory((currentMemory) => currentMemory.slice(-aiMemoryLimit))
@@ -594,13 +677,10 @@ function App() {
       <section className="game-panel">
         <div className="hero-copy">
           <p className="eyebrow">Flippy Card Versus AI</p>
-          <h1>Take turns with an Ollama bot and race to claim the most pairs.</h1>
+          <h1>Play a quick memory match against your Ollama AI.</h1>
           <p className="intro">
-            Easy mode keeps the current balance with 3 remembered tiles.
-            Medium raises the AI to 5 tiles. Hard now gets 7 remembered tiles
-            and stronger recall, so it should pressure the player more. Every
-            scored match still passes the turn across. The game ends when all
-            10 pairs are gone.
+            Pick a difficulty and model, then trade turns until all 10 pairs
+            are cleared. Easy remembers 3 tiles, Medium 5, and Hard 7.
           </p>
         </div>
 
@@ -656,9 +736,9 @@ function App() {
               {ollamaModels.length === 0 ? (
                 <option value="">No models available</option>
               ) : (
-                ollamaModels.map((modelName) => (
-                  <option key={modelName} value={modelName}>
-                    {modelName}
+                ollamaModels.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.label}
                   </option>
                 ))
               )}
@@ -677,24 +757,38 @@ function App() {
                   ? 'Ollama ready'
                   : 'Ollama offline'}
             </span>
-            <p className="connection-note">Proxy target: {OLLAMA_TARGET_LABEL}</p>
           </div>
+
+          <button
+            type="button"
+            className="reset-button"
+            onClick={() => loadModels({ silent: true })}
+            disabled={ollamaState.loading}
+          >
+            Refresh models
+          </button>
 
           <button type="button" className="reset-button" onClick={resetGame}>
             Shuffle again
           </button>
         </div>
 
-        <div
-          className={`banner ${hasWon ? '' : 'banner-muted'}`}
-          role="status"
-          aria-live="polite"
-        >
-          <strong>{statusMessage}</strong>
-          <span className="banner-detail">{getAiMemorySummary()}</span>
-          {ollamaState.error ? (
-            <span className="banner-detail">{ollamaState.error}</span>
-          ) : null}
+        <div className="ai-panels" role="status" aria-live="polite">
+          <section
+            className={`info-panel thinking-panel ${hasWon ? '' : 'is-muted'}`}
+          >
+            <span className="info-panel-label">AI thinking</span>
+            <strong>{statusMessage}</strong>
+            {ollamaState.error ? (
+              <span className="info-panel-detail">{ollamaState.error}</span>
+            ) : null}
+          </section>
+
+          <section className="info-panel memory-panel">
+            <span className="info-panel-label">AI memory</span>
+            <strong>{aiMemoryLimit} tiles</strong>
+            <span className="info-panel-detail">{getAiMemorySummary()}</span>
+          </section>
         </div>
 
         <section className="card-grid" aria-label="Memory game board">
