@@ -5,6 +5,7 @@ import { GameHeader } from './components/GameHeader'
 import { GameStats } from './components/GameStats'
 import { MemoryBoard } from './components/MemoryBoard'
 import { useMemoryGame } from './hooks/useMemoryGame'
+import type { UseMemoryGameResult } from './lib/types'
 
 function App() {
   const {
@@ -29,7 +30,7 @@ function App() {
     refreshModels,
     resetGame,
     handleCardClick,
-  } = useMemoryGame()
+  }: UseMemoryGameResult = useMemoryGame()
 
   return (
     <main className="app-shell">

@@ -1,10 +1,20 @@
+import type { Scores } from '../lib/types'
+
+interface GameStatsProps {
+  scores: Scores
+  moves: number
+  turnLabel: string
+  currentDifficultyLabel: string
+  aiMemoryLimit: number
+}
+
 export function GameStats({
   scores,
   moves,
   turnLabel,
   currentDifficultyLabel,
   aiMemoryLimit,
-}) {
+}: GameStatsProps) {
   const stats = [
     { label: 'Your score', value: scores.human },
     { label: 'AI score', value: scores.ai },

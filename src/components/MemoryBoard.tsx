@@ -1,4 +1,15 @@
 import { MemoryCard } from './MemoryCard'
+import type { ActivePlayer, DeckCard } from '../lib/types'
+
+interface MemoryBoardProps {
+  deck: DeckCard[]
+  selectedIds: string[]
+  activePlayer: ActivePlayer
+  boardLocked: boolean
+  hasWon: boolean
+  ollamaConnected: boolean
+  onCardClick: (cardId: string) => void
+}
 
 export function MemoryBoard({
   deck,
@@ -8,7 +19,7 @@ export function MemoryBoard({
   hasWon,
   ollamaConnected,
   onCardClick,
-}) {
+}: MemoryBoardProps) {
   return (
     <section className="card-grid" aria-label="Memory game board">
       {deck.map((card) => (

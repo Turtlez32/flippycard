@@ -16,30 +16,53 @@ import {
   OLLAMA_TARGET_LABEL,
   fetchSelectableOllamaModels,
 } from '../lib/ollama'
+import type {
+  ActivePlayer,
+  AiDifficultyKey,
+  AiMemoryEntry,
+  DeckCard,
+  OllamaModelOption,
+  OllamaState,
+  Scores,
+  UseMemoryGameResult,
+} from '../lib/types'
 
-export function useMemoryGame() {
-  const [deck, setDeck] = useState(() => createDeck())
-  const [selectedIds, setSelectedIds] = useState([])
+interface AiPickOptions {
+  firstReveal?: DeckCard | null
+  excludedSlots?: number[]
+  onFallback?: () => void
+}
+
+interface ResolveAttemptOptions {
+  firstCard: DeckCard
+  secondCard: DeckCard
+  player: ActivePlayer
+}
+
+export function useMemoryGame(): UseMemoryGameResult {
+  const [deck, setDeck] = useState<DeckCard[]>(() => createDeck())
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [moves, setMoves] = useState(0)
-  const [scores, setScores] = useState({ human: 0, ai: 0 })
-  const [activePlayer, setActivePlayer] = useState('human')
+  const [scores, setScores] = useState<Scores>({ human: 0, ai: 0 })
+  const [activePlayer, setActivePlayer] = useState<ActivePlayer>('human')
   const [boardLocked, setBoardLocked] = useState(false)
   const [statusMessage, setStatusMessage] = useState(
     'Connecting to Ollama. The AI will join once a model is ready.',
   )
-  const [ollamaModels, setOllamaModels] = useState([])
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelOption[]>([])
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
-  const [aiDifficulty, setAiDifficulty] = useState(DEFAULT_AI_DIFFICULTY)
-  const [ollamaState, setOllamaState] = useState({
+  const [aiDifficulty, setAiDifficulty] =
+    useState<AiDifficultyKey>(DEFAULT_AI_DIFFICULTY)
+  const [ollamaState, setOllamaState] = useState<OllamaState>({
     loading: true,
     connected: false,
     error: '',
   })
-  const [aiMemory, setAiMemory] = useState([])
+  const [aiMemory, setAiMemory] = useState<AiMemoryEntry[]>([])
 
-  const deckRef = useRef(deck)
-  const aiMemoryRef = useRef(aiMemory)
-  const timeoutsRef = useRef([])
+  const deckRef = useRef<DeckCard[]>(deck)
+  const aiMemoryRef = useRef<AiMemoryEntry[]>(aiMemory)
+  const timeoutsRef = useRef<number[]>([])
   const runVersionRef = useRef(0)
   const aiRunningRef = useRef(false)
 
@@ -69,7 +92,7 @@ export function useMemoryGame() {
       ? 'You'
       : 'AI'
 
-  const clearPendingWork = useCallback(() => {
+  const clearPendingWork = useCallback((): void => {
     for (const timeoutId of timeoutsRef.current) {
       window.clearTimeout(timeoutId)
     }
@@ -81,7 +104,7 @@ export function useMemoryGame() {
 
   useEffect(() => clearPendingWork, [clearPendingWork])
 
-  const schedule = useCallback((callback, delay) => {
+  const schedule = useCallback((callback: () => void, delay: number): void => {
     const timeoutId = window.setTimeout(() => {
       timeoutsRef.current = timeoutsRef.current.filter((id) => id !== timeoutId)
       callback()
@@ -91,7 +114,7 @@ export function useMemoryGame() {
   }, [])
 
   const pause = useCallback(
-    (delay, expectedVersion) =>
+    (delay: number, expectedVersion: number): Promise<boolean> =>
       new Promise((resolve) => {
         schedule(() => resolve(expectedVersion === runVersionRef.current), delay)
       }),
@@ -99,7 +122,7 @@ export function useMemoryGame() {
   )
 
   const rememberCards = useCallback(
-    (cards) => {
+    (cards: DeckCard[]): void => {
       setAiMemory((currentMemory) => {
         let nextMemory = [...currentMemory]
 
@@ -118,7 +141,7 @@ export function useMemoryGame() {
     [aiMemoryLimit],
   )
 
-  const forgetCards = useCallback((cards) => {
+  const forgetCards = useCallback((cards: DeckCard[]): void => {
     const forgottenSlots = new Set(cards.map((card) => card.slot))
 
     setAiMemory((currentMemory) =>
@@ -127,27 +150,32 @@ export function useMemoryGame() {
   }, [])
 
   const getVisibleMemoryEntries = useCallback(
-    (excludedSlots = []) =>
+    (excludedSlots: number[] = []): AiMemoryEntry[] =>
       aiMemoryRef.current.filter((entry) => !excludedSlots.includes(entry.slot)),
     [],
   )
 
-  const chooseMistakenCard = useCallback((availableCards, excludedSlots = []) => {
-    const mistakenCards = availableCards.filter(
-      (card) => !excludedSlots.includes(card.slot),
-    )
+  const chooseMistakenCard = useCallback(
+    (availableCards: DeckCard[], excludedSlots: number[] = []): DeckCard | null => {
+      const mistakenCards = availableCards.filter(
+        (card) => !excludedSlots.includes(card.slot),
+      )
 
-    return pickRandomCard(mistakenCards.length > 0 ? mistakenCards : availableCards)
-  }, [])
+      return pickRandomCard(
+        mistakenCards.length > 0 ? mistakenCards : availableCards,
+      )
+    },
+    [],
+  )
 
   const getCardById = useCallback(
-    (cardId, sourceDeck = deckRef.current) =>
+    (cardId: string, sourceDeck: DeckCard[] = deckRef.current): DeckCard | undefined =>
       sourceDeck.find((card) => card.instanceId === cardId),
     [],
   )
 
   const getAvailableCards = useCallback(
-    (sourceDeck, excludedSlots = []) =>
+    (sourceDeck: DeckCard[], excludedSlots: number[] = []): DeckCard[] =>
       sourceDeck.filter(
         (card) => !card.matched && !excludedSlots.includes(card.slot),
       ),
@@ -155,7 +183,11 @@ export function useMemoryGame() {
   )
 
   const requestAiPick = useCallback(
-    async ({ firstReveal = null, excludedSlots = [], onFallback }) => {
+    async ({
+      firstReveal = null,
+      excludedSlots = [],
+      onFallback,
+    }: AiPickOptions): Promise<DeckCard | null> => {
       const availableCards = getAvailableCards(deckRef.current, excludedSlots)
       const availableSlots = availableCards.map((card) => card.slot)
       const memoryEntries = getVisibleMemoryEntries(excludedSlots)
@@ -237,7 +269,7 @@ export function useMemoryGame() {
           throw new Error(`Ollama returned ${response.status}`)
         }
 
-        const result = await response.json()
+        const result = (await response.json()) as { response?: string }
         const chosenSlot = parseAiPick(result.response || '', availableSlots)
         const chosenCard = availableCards.find((card) => card.slot === chosenSlot)
 
@@ -245,9 +277,7 @@ export function useMemoryGame() {
           return chosenCard
         }
       } catch {
-        if (typeof onFallback === 'function') {
-          onFallback()
-        }
+        onFallback?.()
       }
 
       return pickRandomCard(availableCards)
@@ -262,7 +292,7 @@ export function useMemoryGame() {
     ],
   )
 
-  const resetGame = useCallback(() => {
+  const resetGame = useCallback((): void => {
     clearPendingWork()
     setDeck(createDeck())
     setSelectedIds([])
@@ -279,9 +309,9 @@ export function useMemoryGame() {
   }, [clearPendingWork, ollamaState.connected])
 
   const resolveAttempt = useCallback(
-    ({ firstCard, secondCard, player }) => {
+    ({ firstCard, secondCard, player }: ResolveAttemptOptions): void => {
       const playerLabel = player === 'human' ? 'You' : 'AI'
-      const nextPlayer = player === 'human' ? 'ai' : 'human'
+      const nextPlayer: ActivePlayer = player === 'human' ? 'ai' : 'human'
       const isMatch = firstCard.id === secondCard.id
 
       rememberCards([firstCard, secondCard])
@@ -344,7 +374,7 @@ export function useMemoryGame() {
   )
 
   const handleCardClick = useCallback(
-    (cardId) => {
+    (cardId: string): void => {
       if (
         activePlayer !== 'human' ||
         boardLocked ||
@@ -394,72 +424,77 @@ export function useMemoryGame() {
     ],
   )
 
-  const pauseForAi = useEffectEvent((delay, expectedVersion) =>
+  const pauseForAi = useEffectEvent((delay: number, expectedVersion: number) =>
     pause(delay, expectedVersion),
   )
-  const rememberAiCards = useEffectEvent((cards) => rememberCards(cards))
-  const pickAiCard = useEffectEvent((options) => requestAiPick(options))
-  const resolveAiAttempt = useEffectEvent((attempt) => resolveAttempt(attempt))
+  const rememberAiCards = useEffectEvent((cards: DeckCard[]) => rememberCards(cards))
+  const pickAiCard = useEffectEvent((options: AiPickOptions) => requestAiPick(options))
+  const resolveAiAttempt = useEffectEvent((attempt: ResolveAttemptOptions) =>
+    resolveAttempt(attempt),
+  )
 
-  const loadModels = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) {
-      setOllamaState({ loading: true, connected: false, error: '' })
-    } else {
-      setOllamaState((currentState) => ({
-        ...currentState,
-        loading: true,
-        error: '',
-      }))
-    }
+  const loadModels = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}): Promise<void> => {
+      if (!silent) {
+        setOllamaState({ loading: true, connected: false, error: '' })
+      } else {
+        setOllamaState((currentState) => ({
+          ...currentState,
+          loading: true,
+          error: '',
+        }))
+      }
 
-    try {
-      const { installedModels, selectableModels } =
-        await fetchSelectableOllamaModels()
+      try {
+        const { installedModels, selectableModels } =
+          await fetchSelectableOllamaModels()
 
-      setOllamaModels(selectableModels)
-      setSelectedModel((currentModel) => {
-        if (
-          currentModel &&
-          selectableModels.some((model) => model.name === currentModel)
-        ) {
-          return currentModel
-        }
+        setOllamaModels(selectableModels)
+        setSelectedModel((currentModel: string) => {
+          if (
+            currentModel &&
+            selectableModels.some((model) => model.name === currentModel)
+          ) {
+            return currentModel
+          }
 
-        return selectableModels[0]?.name || ''
-      })
-      setOllamaState({
-        loading: false,
-        connected: selectableModels.length > 0,
-        error:
-          installedModels.length === 0
-            ? 'No Ollama models found.'
-            : selectableModels.length === 0
-              ? 'Installed Ollama models are not chat/generation capable.'
-              : '',
-      })
-      setStatusMessage(
-        selectableModels.length > 0
-          ? 'Ollama is ready. Your turn to flip the opening card.'
-          : installedModels.length === 0
-            ? 'Ollama responded, but no models are installed.'
-            : 'Ollama responded, but no generation-capable models are available for AI play.',
-      )
-    } catch {
-      setOllamaModels([])
-      setSelectedModel('')
-      setOllamaState({
-        loading: false,
-        connected: false,
-        error: `Could not reach Ollama at ${OLLAMA_TARGET_LABEL}.`,
-      })
-      setStatusMessage(
-        'The AI could not connect. Check the proxy target or enable CORS.',
-      )
-    }
-  }, [])
+          return selectableModels[0]?.name || ''
+        })
+        setOllamaState({
+          loading: false,
+          connected: selectableModels.length > 0,
+          error:
+            installedModels.length === 0
+              ? 'No Ollama models found.'
+              : selectableModels.length === 0
+                ? 'Installed Ollama models are not chat/generation capable.'
+                : '',
+        })
+        setStatusMessage(
+          selectableModels.length > 0
+            ? 'Ollama is ready. Your turn to flip the opening card.'
+            : installedModels.length === 0
+              ? 'Ollama responded, but no models are installed.'
+              : 'Ollama responded, but no generation-capable models are available for AI play.',
+        )
+      } catch {
+        setOllamaModels([])
+        setSelectedModel('')
+        setOllamaState({
+          loading: false,
+          connected: false,
+          error: `Could not reach Ollama at ${OLLAMA_TARGET_LABEL}.`,
+        })
+        setStatusMessage(
+          'The AI could not connect. Check the proxy target or enable CORS.',
+        )
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
-    loadModels()
+    void loadModels()
   }, [loadModels])
 
   useEffect(() => {
@@ -490,7 +525,7 @@ export function useMemoryGame() {
     aiRunningRef.current = true
     const expectedVersion = runVersionRef.current
 
-    const runAiTurn = async () => {
+    const runAiTurn = async (): Promise<void> => {
       setBoardLocked(true)
       setStatusMessage('AI is thinking about the first flip...')
 
@@ -575,7 +610,9 @@ export function useMemoryGame() {
     turnLabel,
     setSelectedModel,
     setAiDifficulty,
-    refreshModels: () => loadModels({ silent: true }),
+    refreshModels: () => {
+      void loadModels({ silent: true })
+    },
     resetGame,
     handleCardClick,
   }

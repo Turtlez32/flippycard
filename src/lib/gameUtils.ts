@@ -1,7 +1,8 @@
 import { CARD_LIBRARY } from './gameConfig'
+import type { AiMemoryEntry, DeckCard } from './types'
 
-export function createDeck() {
-  const duplicatedCards = CARD_LIBRARY.flatMap((card) => [
+export function createDeck(): DeckCard[] {
+  const duplicatedCards: Array<Omit<DeckCard, 'slot'>> = CARD_LIBRARY.flatMap((card) => [
     { ...card, instanceId: `${card.id}-a`, matched: false },
     { ...card, instanceId: `${card.id}-b`, matched: false },
   ])
@@ -20,7 +21,7 @@ export function createDeck() {
   }))
 }
 
-export function pickRandomCard(cards) {
+export function pickRandomCard(cards: DeckCard[]): DeckCard | null {
   if (cards.length === 0) {
     return null
   }
@@ -29,12 +30,16 @@ export function pickRandomCard(cards) {
   return cards[randomIndex]
 }
 
-export function getKnownPair(memoryEntries) {
-  const seenByLabel = new Map()
+export function getKnownPair(
+  memoryEntries: AiMemoryEntry[],
+): [number, number] | null {
+  const seenByLabel = new Map<string, number>()
 
   for (const entry of memoryEntries) {
-    if (seenByLabel.has(entry.label)) {
-      return [seenByLabel.get(entry.label), entry.slot]
+    const firstSlot = seenByLabel.get(entry.label)
+
+    if (firstSlot !== undefined) {
+      return [firstSlot, entry.slot]
     }
 
     seenByLabel.set(entry.label, entry.slot)
@@ -43,7 +48,10 @@ export function getKnownPair(memoryEntries) {
   return null
 }
 
-export function parseAiPick(rawResponse, availableSlots) {
+export function parseAiPick(
+  rawResponse: string,
+  availableSlots: number[],
+): number | null {
   const matchedNumber = rawResponse.match(/\d+/)
 
   if (!matchedNumber) {

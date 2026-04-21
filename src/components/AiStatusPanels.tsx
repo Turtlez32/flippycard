@@ -1,10 +1,18 @@
+interface AiStatusPanelsProps {
+  hasWon: boolean
+  statusMessage: string
+  ollamaError: string
+  aiMemoryLimit: number
+  aiMemorySummary: string
+}
+
 export function AiStatusPanels({
   hasWon,
   statusMessage,
   ollamaError,
   aiMemoryLimit,
   aiMemorySummary,
-}) {
+}: AiStatusPanelsProps) {
   return (
     <div className="ai-panels" role="status" aria-live="polite">
       <section className={`info-panel thinking-panel ${hasWon ? '' : 'is-muted'}`}>
