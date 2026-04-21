@@ -757,7 +757,6 @@ function App() {
                   ? 'Ollama ready'
                   : 'Ollama offline'}
             </span>
-            <p className="connection-note">Proxy target: {OLLAMA_TARGET_LABEL}</p>
           </div>
 
           <button
