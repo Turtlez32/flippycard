@@ -1,4 +1,6 @@
-export const AI_DIFFICULTIES = {
+import type { AiDifficultyConfig, AiDifficultyKey, CardDefinition } from './types'
+
+export const AI_DIFFICULTIES: Record<AiDifficultyKey, AiDifficultyConfig> = {
   easy: {
     label: 'Easy',
     memoryLimit: 3,
@@ -16,9 +18,9 @@ export const AI_DIFFICULTIES = {
   },
 }
 
-export const DEFAULT_AI_DIFFICULTY = 'easy'
+export const DEFAULT_AI_DIFFICULTY: AiDifficultyKey = 'easy'
 
-export const CARD_LIBRARY = [
+export const CARD_LIBRARY: CardDefinition[] = [
   { id: 'aurora', icon: '🌈', label: 'Aurora', accent: '#ff7b72' },
   { id: 'rocket', icon: '🚀', label: 'Rocket', accent: '#f59e0b' },
   { id: 'pearl', icon: '🫧', label: 'Pearl', accent: '#38bdf8' },

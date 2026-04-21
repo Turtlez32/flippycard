@@ -1,4 +1,19 @@
-export function MemoryCard({ card, isFlipped, disabled, onClick }) {
+import type { CSSProperties } from 'react'
+import type { DeckCard } from '../lib/types'
+
+interface MemoryCardProps {
+  card: DeckCard
+  isFlipped: boolean
+  disabled: boolean
+  onClick: (cardId: string) => void
+}
+
+export function MemoryCard({
+  card,
+  isFlipped,
+  disabled,
+  onClick,
+}: MemoryCardProps) {
   return (
     <button
       type="button"
@@ -13,7 +28,7 @@ export function MemoryCard({ card, isFlipped, disabled, onClick }) {
       }
       aria-pressed={isFlipped}
       disabled={disabled}
-      style={{ '--card-accent': card.accent }}
+      style={{ '--card-accent': card.accent } as CSSProperties}
     >
       <span className="memory-card-inner">
         <span className="memory-card-face memory-card-back">

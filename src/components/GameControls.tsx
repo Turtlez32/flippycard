@@ -1,4 +1,16 @@
 import { AI_DIFFICULTIES } from '../lib/gameConfig'
+import type { AiDifficultyKey, OllamaModelOption, OllamaState } from '../lib/types'
+
+interface GameControlsProps {
+  aiDifficulty: AiDifficultyKey
+  ollamaModels: OllamaModelOption[]
+  selectedModel: string
+  ollamaState: OllamaState
+  onDifficultyChange: (difficulty: AiDifficultyKey) => void
+  onModelChange: (model: string) => void
+  onRefreshModels: () => void
+  onResetGame: () => void
+}
 
 export function GameControls({
   aiDifficulty,
@@ -9,14 +21,16 @@ export function GameControls({
   onModelChange,
   onRefreshModels,
   onResetGame,
-}) {
+}: GameControlsProps) {
   return (
     <div className="controls-panel">
       <label className="model-picker">
         <span>AI difficulty</span>
         <select
           value={aiDifficulty}
-          onChange={(event) => onDifficultyChange(event.target.value)}
+          onChange={(event) =>
+            onDifficultyChange(event.target.value as AiDifficultyKey)
+          }
         >
           {Object.entries(AI_DIFFICULTIES).map(([key, difficulty]) => (
             <option key={key} value={key}>
